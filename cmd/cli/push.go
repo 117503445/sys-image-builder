@@ -1,11 +1,16 @@
 package main
 
 import (
-	"github.com/117503445/sys-image-builder/internal/pusher"
+	"context"
+
+	"github.com/117503445/sys-image-builder/pkg/sysimage"
+	"github.com/rs/zerolog/log"
 )
 
 func push(cmd *CmdPush) error {
-	return pusher.Push(pusher.Config{
+	ctx := context.Background()
+	ctx = log.Logger.WithContext(ctx)
+	return sysimage.Push(ctx, sysimage.Config{
 		ImageRef: cmd.Image,
 		Username: cmd.Username,
 		Password: cmd.Password,

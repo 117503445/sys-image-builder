@@ -2,6 +2,7 @@ package pusher
 
 import (
 	"archive/tar"
+	"context"
 	"fmt"
 	"io"
 	"io/fs"
@@ -35,7 +36,7 @@ type Config struct {
 	Excludes []string
 }
 
-func Push(cfg Config) error {
+func Push(ctx context.Context, cfg Config) error {
 	excludes := cfg.Excludes
 	if len(excludes) == 0 {
 		excludes = defaultExcludes
@@ -65,7 +66,7 @@ func Push(cfg Config) error {
 		return fmt.Errorf("set base config: %w", err)
 	}
 
-	layer := stream.NewLayer(createRootfsTarReader(excludes))
+	layer := stream.NewLayer(createRootfsTarReader(ctx, excludes))
 
 	img, err := mutate.AppendLayers(base, layer)
 	if err != nil {
@@ -74,13 +75,13 @@ func Push(cfg Config) error {
 
 	auth := &authn.Basic{Username: cfg.Username, Password: cfg.Password}
 
-	log.Info().Str("ref", ref.String()).Msg("pushing image")
+	log.Ctx(ctx).Info().Str("ref", ref.String()).Msg("pushing image")
 
 	if err := remote.Write(ref, img, remote.WithAuth(auth)); err != nil {
 		return fmt.Errorf("push image: %w", err)
 	}
 
-	log.Info().Str("ref", ref.String()).Msg("image pushed successfully")
+	log.Ctx(ctx).Info().Str("ref", ref.String()).Msg("image pushed successfully")
 	return nil
 }
 
@@ -93,7 +94,7 @@ func shouldExclude(path string, excludes []string) bool {
 	return false
 }
 
-func createRootfsTarReader(excludes []string) io.ReadCloser {
+func createRootfsTarReader(ctx context.Context, excludes []string) io.ReadCloser {
 	pr, pw := io.Pipe()
 
 	go func() {
@@ -103,7 +104,7 @@ func createRootfsTarReader(excludes []string) io.ReadCloser {
 		walkErr = filepath.Walk("/", func(path string, info fs.FileInfo, err error) error {
 			if err != nil {
 				if path != "/" {
-					log.Warn().Err(err).Str("path", path).Msg("skipping inaccessible path")
+					log.Ctx(ctx).Warn().Err(err).Str("path", path).Msg("skipping inaccessible path")
 					if info != nil && info.IsDir() {
 						return filepath.SkipDir
 					}
@@ -130,7 +131,7 @@ func createRootfsTarReader(excludes []string) io.ReadCloser {
 			if mode&os.ModeSymlink != 0 {
 				linkTarget, err = os.Readlink(path)
 				if err != nil {
-					log.Warn().Err(err).Str("path", path).Msg("skipping unreadable symlink")
+					log.Ctx(ctx).Warn().Err(err).Str("path", path).Msg("skipping unreadable symlink")
 					return nil
 				}
 			}
@@ -143,7 +144,7 @@ func createRootfsTarReader(excludes []string) io.ReadCloser {
 
 			header, err := tar.FileInfoHeader(info, linkTarget)
 			if err != nil {
-				log.Warn().Err(err).Str("path", path).Msg("skipping file with bad header")
+				log.Ctx(ctx).Warn().Err(err).Str("path", path).Msg("skipping file with bad header")
 				return nil
 			}
 			header.Name = tarPath
@@ -161,7 +162,7 @@ func createRootfsTarReader(excludes []string) io.ReadCloser {
 			if mode.IsRegular() {
 				f, err := os.Open(path)
 				if err != nil {
-					log.Warn().Err(err).Str("path", path).Msg("skipping unreadable file")
+					log.Ctx(ctx).Warn().Err(err).Str("path", path).Msg("skipping unreadable file")
 					return nil
 				}
 				if _, err := io.Copy(tw, f); err != nil {
