@@ -11,9 +11,11 @@ func push(cmd *CmdPush) error {
 	ctx := context.Background()
 	ctx = log.Logger.WithContext(ctx)
 	return sysimage.Push(ctx, sysimage.Config{
-		ImageRef: cmd.Image,
-		Username: cmd.Username,
-		Password: cmd.Password,
-		Insecure: cmd.Insecure,
+		RegistryConfig: sysimage.RegistryConfig{
+			ImageRef: cmd.Image,
+			Username: cmd.Username,
+			Password: cmd.Password,
+			Insecure: cmd.Insecure,
+		},
 	})
 }

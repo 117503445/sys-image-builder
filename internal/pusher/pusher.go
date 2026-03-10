@@ -28,26 +28,49 @@ var defaultExcludes = []string{
 	"/var/cache", "/var/tmp",
 }
 
-type Config struct {
+type RegistryConfig struct {
 	ImageRef string
 	Username string
 	Password string
 	Insecure bool
+}
+
+type BuildConfig struct {
 	Excludes []string
 }
 
+type ImageConfig struct {
+	Cmd          []string
+	Entrypoint   []string
+	WorkingDir   string
+	User         string
+	ExposedPorts []string
+	Env          []string
+	Labels       map[string]string
+}
+
+type Config struct {
+	RegistryConfig RegistryConfig
+	BuildConfig    BuildConfig
+	ImageConfig    ImageConfig
+}
+
 func Push(ctx context.Context, cfg Config) error {
-	excludes := cfg.Excludes
+	excludes := cfg.BuildConfig.Excludes
 	if len(excludes) == 0 {
 		excludes = defaultExcludes
 	}
 
+	if len(cfg.ImageConfig.Entrypoint) == 0 && len(cfg.ImageConfig.Cmd) == 0 {
+		cfg.ImageConfig.Cmd = []string{"/bin/sh"}
+	}
+
 	var opts []name.Option
-	if cfg.Insecure {
+	if cfg.RegistryConfig.Insecure {
 		opts = append(opts, name.Insecure)
 	}
 
-	ref, err := name.ParseReference(cfg.ImageRef, opts...)
+	ref, err := name.ParseReference(cfg.RegistryConfig.ImageRef, opts...)
 	if err != nil {
 		return fmt.Errorf("parse image reference: %w", err)
 	}
@@ -56,7 +79,13 @@ func Push(ctx context.Context, cfg Config) error {
 		Architecture: runtime.GOARCH,
 		OS:           "linux",
 		Config: v1.Config{
-			Cmd: []string{"/bin/sh"},
+			Cmd:          cfg.ImageConfig.Cmd,
+			Entrypoint:   cfg.ImageConfig.Entrypoint,
+			WorkingDir:   cfg.ImageConfig.WorkingDir,
+			User:         cfg.ImageConfig.User,
+			Env:          cfg.ImageConfig.Env,
+			Labels:       cfg.ImageConfig.Labels,
+			ExposedPorts: buildExposedPorts(cfg.ImageConfig.ExposedPorts),
 		},
 		RootFS: v1.RootFS{
 			Type: "layers",
@@ -73,7 +102,7 @@ func Push(ctx context.Context, cfg Config) error {
 		return fmt.Errorf("append layer: %w", err)
 	}
 
-	auth := &authn.Basic{Username: cfg.Username, Password: cfg.Password}
+	auth := &authn.Basic{Username: cfg.RegistryConfig.Username, Password: cfg.RegistryConfig.Password}
 
 	log.Ctx(ctx).Info().Str("ref", ref.String()).Msg("pushing image")
 
@@ -92,6 +121,17 @@ func shouldExclude(path string, excludes []string) bool {
 		}
 	}
 	return false
+}
+
+func buildExposedPorts(ports []string) map[string]struct{} {
+	if len(ports) == 0 {
+		return nil
+	}
+	result := make(map[string]struct{})
+	for _, p := range ports {
+		result[p] = struct{}{}
+	}
+	return result
 }
 
 func createRootfsTarReader(ctx context.Context, excludes []string) io.ReadCloser {
