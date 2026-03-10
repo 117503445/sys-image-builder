@@ -9,3 +9,5 @@ includes:
     taskfile: ./scripts/tasks/build
   run:
     taskfile: ./scripts/tasks/run
+  e2e:
+    taskfile: ./scripts/tasks/e2e

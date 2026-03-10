@@ -1,0 +1,8 @@
+version: 3
+
+tasks:
+  run:
+    desc: "Run e2e test"
+    deps: [":base:clear"]
+    cmds:
+      - cd ./scripts/go-script && go run . e2e
