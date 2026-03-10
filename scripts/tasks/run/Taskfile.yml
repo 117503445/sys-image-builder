@@ -1,0 +1,8 @@
+version: 3
+
+tasks:
+  cli-run:
+    desc: "Build and run CLI"
+    deps: [":base:clear", ":build:bin"]
+    cmds:
+      - ./data/cli/cli build
