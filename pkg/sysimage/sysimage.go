@@ -1,89 +1,90 @@
-// Package sysimage provides functionality to build and push system images to container registries.
-//
-// This package allows Go programs to integrate system image building capabilities,
-// enabling them to package the current system's rootfs into a container image and
-// push it to a container registry.
-//
-// Example usage:
-//
-//	err := sysimage.Push(sysimage.Config{
-//	    ImageRef: "registry.example.com/my-image:v1",
-//	    Username: "user",
-//	    Password: "pass",
-//	})
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
+// Package sysimage 提供系统 rootfs 打包和推送能力。
 package sysimage
 
 import (
 	"context"
+	"io"
 
 	"github.com/117503445/sys-image-builder/internal/pusher"
 )
 
-// RegistryConfig holds the registry configuration.
+// RegistryConfig 表示镜像仓库配置。
 type RegistryConfig struct {
-	// ImageRef is the image reference (e.g., "registry:5000/repo:tag")
+	// ImageRef 是镜像引用，例如 "registry:5000/repo:tag"。
 	ImageRef string
 
-	// Username for registry authentication
+	// Username 是镜像仓库认证用户名。
 	Username string
 
-	// Password for registry authentication
+	// Password 是镜像仓库认证密码。
 	Password string
 
-	// Insecure uses HTTP instead of HTTPS for the registry
+	// Insecure 表示使用 HTTP 访问镜像仓库。
 	Insecure bool
 }
 
-// ImageConfig holds the container image configuration.
+// ImageConfig 表示容器镜像配置。
 type ImageConfig struct {
-	// Cmd is the default arguments to the entrypoint of the container.
+	// Cmd 是容器入口的默认参数。
 	Cmd []string
 
-	// Entrypoint is the entry point of the container.
+	// Entrypoint 是容器入口命令。
 	Entrypoint []string
 
-	// WorkingDir is the current working directory of the container.
+	// WorkingDir 是容器工作目录。
 	WorkingDir string
 
-	// User is the user that the container should run as.
+	// User 是容器运行用户。
 	User string
 
-	// ExposedPorts is a set of ports to expose from the container.
+	// ExposedPorts 是容器暴露端口列表。
 	ExposedPorts []string
 
-	// Env is a list of environment variables in the form KEY=VALUE.
+	// Env 是 KEY=VALUE 格式的环境变量列表。
 	Env []string
 
-	// Labels are key-value pairs that are attached to the container.
+	// Labels 是附加到容器镜像的键值标签。
 	Labels map[string]string
 }
 
-// BuildConfig holds the build configuration.
+// BuildConfig 表示 rootfs 打包配置。
 type BuildConfig struct {
-	// Excludes is a list of paths to exclude from the rootfs.
-	// If empty, default excludes are used: /proc, /sys, /dev, /run, /tmp, /mnt, /media, /lost+found, /var/cache, /var/tmp
+	// Excludes 是打包 rootfs 时排除的路径列表。
+	// 为空时不排除任何路径；如需默认排除路径，请显式使用 DefaultExcludes。
 	Excludes []string
 }
 
-// Config holds the configuration for pushing a system image.
+// Config 表示系统镜像推送配置。
 type Config struct {
-	// RegistryConfig is the registry configuration.
+	// RegistryConfig 是镜像仓库配置。
 	RegistryConfig RegistryConfig
 
-	// BuildConfig is the build configuration.
+	// BuildConfig 是 rootfs 打包配置。
 	BuildConfig BuildConfig
 
-	// ImageConfig is the container image configuration.
+	// ImageConfig 是容器镜像配置。
 	ImageConfig ImageConfig
 }
 
-// Push packages the current system's rootfs into a container image and pushes it to the specified registry.
+// DefaultExcludes 返回默认 rootfs 排除路径副本。
+func DefaultExcludes() []string {
+	return pusher.DefaultExcludes()
+}
+
+// PackRootfs 将当前系统 rootfs 打包为 tar 流并返回 reader。
 //
-// The rootfs is packaged as a tar archive (excluding system directories by default) and
-// pushed as a single layer container image.
+// 参数 ctx 用于传递日志上下文。
+// 参数 cfg 用于指定 rootfs 打包配置，Excludes 为空时不排除任何路径。
+func PackRootfs(ctx context.Context, cfg BuildConfig) io.ReadCloser {
+	return pusher.PackRootfs(ctx, pusher.BuildConfig{
+		Excludes: cfg.Excludes,
+	})
+}
+
+// Push 将当前系统 rootfs 打包为容器镜像并推送到指定镜像仓库。
+//
+// 参数 ctx 用于传递日志上下文。
+// 参数 cfg 用于指定镜像仓库、rootfs 打包和容器镜像配置。
 func Push(ctx context.Context, cfg Config) error {
 	return pusher.Push(ctx, pusher.Config{
 		RegistryConfig: pusher.RegistryConfig{

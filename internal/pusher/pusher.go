@@ -28,6 +28,13 @@ var defaultExcludes = []string{
 	"/var/cache", "/var/tmp",
 }
 
+// DefaultExcludes 返回默认 rootfs 排除路径副本。
+func DefaultExcludes() []string {
+	excludes := make([]string, len(defaultExcludes))
+	copy(excludes, defaultExcludes)
+	return excludes
+}
+
 type RegistryConfig struct {
 	ImageRef string
 	Username string
@@ -55,12 +62,19 @@ type Config struct {
 	ImageConfig    ImageConfig
 }
 
-func Push(ctx context.Context, cfg Config) error {
-	excludes := cfg.BuildConfig.Excludes
-	if len(excludes) == 0 {
-		excludes = defaultExcludes
-	}
+// PackRootfs 将当前系统 rootfs 打包为 tar 流。
+//
+// 参数 ctx 用于传递日志上下文。
+// 参数 cfg 用于指定 rootfs 打包配置，Excludes 为空时不排除任何路径。
+func PackRootfs(ctx context.Context, cfg BuildConfig) io.ReadCloser {
+	return createRootfsTarReader(ctx, cfg.Excludes)
+}
 
+// Push 将当前系统 rootfs 打包为容器镜像并推送到镜像仓库。
+//
+// 参数 ctx 用于传递日志上下文。
+// 参数 cfg 用于指定镜像仓库、rootfs 打包和容器镜像配置。
+func Push(ctx context.Context, cfg Config) error {
 	if len(cfg.ImageConfig.Entrypoint) == 0 && len(cfg.ImageConfig.Cmd) == 0 {
 		cfg.ImageConfig.Cmd = []string{"/bin/sh"}
 	}
@@ -95,7 +109,7 @@ func Push(ctx context.Context, cfg Config) error {
 		return fmt.Errorf("set base config: %w", err)
 	}
 
-	layer := stream.NewLayer(createRootfsTarReader(ctx, excludes))
+	layer := stream.NewLayer(PackRootfs(ctx, cfg.BuildConfig))
 
 	img, err := mutate.AppendLayers(base, layer)
 	if err != nil {

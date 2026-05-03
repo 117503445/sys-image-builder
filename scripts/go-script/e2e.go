@@ -176,6 +176,7 @@ func e2e() {
 		"--username", registryUser,
 		"--password", registryPass,
 		"--insecure",
+		"--default-excludes",
 	)
 
 	// Step 6: pull and verify
